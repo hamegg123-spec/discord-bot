@@ -24,13 +24,21 @@ async def post_event(payload: EventPayload):
     await channel.send(payload.message)
     return {"ok": True}
 
+@bot.event
+async def on_ready():
+    print(f"Bot logged in as {bot.user}")
+
 async def start_all():
+    print("Starting Discord bot...")
     bot_task = asyncio.create_task(bot.start(os.environ["DISCORD_TOKEN"]))
+
+    print("Starting FastAPI server...")
     uvicorn_task = asyncio.create_task(
         uvicorn.Server(
             uvicorn.Config(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
         ).serve()
     )
+
     await asyncio.gather(bot_task, uvicorn_task)
 
 if __name__ == "__main__":
