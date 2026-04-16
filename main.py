@@ -1,5 +1,5 @@
 # ============================================================================
-# main.py ver8 (Railway 完全安定版・Procfile対応)
+# main.py ver9 (Railway ヘルスチェック対応・完全安定版)
 # ============================================================================
 
 import os
@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import uvicorn
 
-print("=== main.py ver8: 起動開始 ===")
+print("=== main.py ver9: 起動開始 ===")
 
 # ---------------------------------------------------------------------------
 # Discord Bot
@@ -34,6 +34,11 @@ def run_bot():
 # ---------------------------------------------------------------------------
 app = FastAPI()
 
+# ★ Railway のヘルスチェック用ルート
+@app.get("/")
+async def root():
+    return {"status": "ok"}
+
 class EventPayload(BaseModel):
     channelId: str
     message: str
@@ -54,12 +59,10 @@ async def post_event(payload: EventPayload):
 # メイン
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    print("=== main.py ver8: メイン開始 ===")
+    print("=== main.py ver9: メイン開始 ===")
 
-    # Bot をバックグラウンドで起動
     threading.Thread(target=run_bot, daemon=True).start()
 
-    # FastAPI をフォアグラウンドで起動（Railway が必要とするプロセス）
     port = int(os.environ.get("PORT", 8080))
     print(f"=== FastAPI 起動: ポート {port} ===")
     uvicorn.run(app, host="0.0.0.0", port=port)
