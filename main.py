@@ -1,5 +1,5 @@
 # ============================================================================
-# main.py ver5 (原因特定ログ MAX 版)
+# main.py ver6 (FastAPI shutdown 原因特定 MAX 版)
 # ============================================================================
 
 import os
@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import uvicorn
 
-print("=== main.py ver5: 起動開始 ===")
+print("=== main.py ver6: 起動開始 ===")
 
 # ---------------------------------------------------------------------------
 # Discord Bot 設定
@@ -93,15 +93,14 @@ async def start_api():
         app,
         host="0.0.0.0",
         port=port,
-        log_level="info",
-        # shutdown 時のログを強制出力
+        log_level="debug",  # ← debug に変更
         timeout_keep_alive=5
     )
     server = uvicorn.Server(config)
 
     print("=== FastAPI: server.serve() 開始 ===")
     await server.serve()
-    print("=== FastAPI: server.serve() 終了（ここが原因ポイント） ===")
+    print(f"=== FastAPI: server.serve() 終了 / should_exit={server.should_exit} ===")
 
 # ---------------------------------------------------------------------------
 # メイン（FastAPI をメイン、Bot をバックグラウンド）
