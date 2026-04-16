@@ -1,5 +1,7 @@
 # ============================================================================
-# main.py (Bot + FastAPI + イベントループ修正版 + ログ強化)
+# main.py (Discord Bot + FastAPI + Workers ver25.0 対応版)
+# - Workers からの JSON: { "channelId": "...", "text": "..." } を受け取り、
+#   指定チャンネルにそのまま送信する。
 # ============================================================================
 
 import os
@@ -12,9 +14,9 @@ import asyncio
 import datetime
 
 # ===== ログ関数 =====
-def log(msg):
+def log(msg: str):
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{now}] {msg}")
+    print(f"[{now}] {msg}", flush=True)
 
 # ===== Discord Bot =====
 log("=== Discord Bot 起動開始 ===")
@@ -33,38 +35,55 @@ async def on_ready():
 # ===== FastAPI =====
 app = FastAPI()
 
+# ★ Workers ver25.0 に合わせてフィールド名を text に変更
 class PostData(BaseModel):
     channelId: str
-    message: str
+    text: str
 
-@app.post("/post")
-async def post_message(data: PostData):
-    log(f"/post 受信: channelId={data.channelId}, message={data.message}")
+# ★ Workers 側の env.RAILWAY_URL のパスに合わせる
+#   例: env.RAILWAY_URL = "https://xxx.railway.app/postCastleEvent"
+@app.post("/postCastleEvent")
+async def post_castle_event(data: PostData):
+    """
+    Cloudflare Workers からの城落ちイベントを受け取り、
+    Discord の指定チャンネルに text をそのまま送信する。
+    """
+    try:
+        channel_id_int = int(data.channelId)
+    except ValueError:
+        log(f"[ERROR] channelId が数値に変換できない: {data.channelId}")
+        return {"status": "invalid_channelId"}
 
-    channel = bot.get_channel(int(data.channelId))
-
+    channel = bot.get_channel(channel_id_int)
     if channel is None:
-        log(f"エラー: チャンネル {data.channelId} が見つからない")
+        log(f"[ERROR] チャンネルが見つからない: {channel_id_int}")
         return {"status": "channel_not_found"}
 
-    # Discord Bot のイベントループで送信する
     try:
-        bot.loop.create_task(channel.send(data.message))
-        log(f"Discord 投稿タスク作成 → {data.channelId}")
+        log(f"[INFO] Discord 送信開始: ch={channel_id_int}, text={data.text}")
+        await channel.send(data.text)
+        log(f"[INFO] Discord 送信完了: ch={channel_id_int}")
         return {"status": "sent"}
     except Exception as e:
-        log(f"Discord 投稿エラー: {e}")
+        log(f"[ERROR] Discord 送信失敗: {e}")
         return {"status": "error", "detail": str(e)}
 
-# ===== Discord Bot を別スレッドで起動 =====
-def start_discord_bot():
-    token = os.environ["DISCORD_TOKEN"]
-    log("Discord Bot スレッド開始")
-    asyncio.run(bot.start(token))
+# ===== FastAPI サーバー起動（別スレッド） =====
+def start_fastapi():
+    port = int(os.getenv("PORT", "8000"))
+    log(f"FastAPI 起動: 0.0.0.0:{port}")
+    uvicorn.run(app, host="0.0.0.0", port=port)
 
-threading.Thread(target=start_discord_bot).start()
-
-# ===== FastAPI をメインスレッドで起動 =====
+# ===== エントリポイント =====
 if __name__ == "__main__":
-    log("FastAPI 起動開始 (0.0.0.0:8080)")
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    # FastAPI を別スレッドで起動
+    api_thread = threading.Thread(target=start_fastapi, daemon=True)
+    api_thread.start()
+
+    # Discord Bot をメインスレッドで起動
+    token = os.getenv("DISCORD_BOT_TOKEN")
+    if not token:
+        log("[FATAL] DISCORD_BOT_TOKEN が環境変数に設定されていません")
+    else:
+        log("Discord Bot 接続開始")
+        bot.run(token)
