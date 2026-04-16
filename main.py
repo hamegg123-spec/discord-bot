@@ -1,5 +1,5 @@
 # ============================================================================
-# main.py ver3 (Railway 安定稼働版 + ログ強化)
+# main.py ver5 (原因特定ログ MAX 版)
 # ============================================================================
 
 import os
@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import uvicorn
 
-print("=== main.py ver3: 起動開始 ===")
+print("=== main.py ver5: 起動開始 ===")
 
 # ---------------------------------------------------------------------------
 # Discord Bot 設定
@@ -33,9 +33,17 @@ async def on_disconnect():
     print("=== Discord Bot: 切断されました ===")
 
 # ---------------------------------------------------------------------------
-# FastAPI
+# FastAPI（lifespan ログ強化）
 # ---------------------------------------------------------------------------
 app = FastAPI()
+
+@app.on_event("startup")
+async def on_startup():
+    print("=== FastAPI: startup イベント発火 ===")
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    print("=== FastAPI: shutdown イベント発火 ===")
 
 class EventPayload(BaseModel):
     channelId: str
@@ -59,7 +67,7 @@ async def post_event(payload: EventPayload):
         return {"ok": False, "error": str(e)}
 
 # ---------------------------------------------------------------------------
-# Discord Bot 起動
+# Discord Bot 起動（バックグラウンド）
 # ---------------------------------------------------------------------------
 async def start_bot():
     print("=== Discord Bot 起動開始 ===")
@@ -75,25 +83,37 @@ async def start_bot():
         print(f"=== Bot 起動エラー: {e} ===")
 
 # ---------------------------------------------------------------------------
-# FastAPI 起動（バックグラウンドで永続）
+# FastAPI 起動（メインタスク）
 # ---------------------------------------------------------------------------
 async def start_api():
     print("=== FastAPI 起動開始 ===")
     port = int(os.environ.get("PORT", 8080))
-    config = uvicorn.Config(app, host="0.0.0.0", port=port, log_level="info")
+
+    config = uvicorn.Config(
+        app,
+        host="0.0.0.0",
+        port=port,
+        log_level="info",
+        # shutdown 時のログを強制出力
+        timeout_keep_alive=5
+    )
     server = uvicorn.Server(config)
 
-    # serve() を await しない → 永続動作
-    asyncio.create_task(server.serve())
+    print("=== FastAPI: server.serve() 開始 ===")
+    await server.serve()
+    print("=== FastAPI: server.serve() 終了（ここが原因ポイント） ===")
 
 # ---------------------------------------------------------------------------
-# メイン（Bot + FastAPI を同時起動し、永続ループで維持）
+# メイン（FastAPI をメイン、Bot をバックグラウンド）
 # ---------------------------------------------------------------------------
 async def main():
-    print("=== main() 開始: Bot + FastAPI 同時起動 ===")
+    print("=== main() 開始: FastAPI メイン + Bot バックグラウンド ===")
 
-    await start_api()  # FastAPI をバックグラウンドで起動
-    await start_bot()  # Bot をメインで起動（永続）
+    # Bot をバックグラウンドで起動
+    asyncio.create_task(start_bot())
+
+    # FastAPI をメインタスクとして永続起動
+    await start_api()
 
 if __name__ == "__main__":
     print("=== asyncio.run(main()) 実行 ===")
