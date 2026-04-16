@@ -1,5 +1,5 @@
 # ============================================================================
-# main.py (FastAPI + Discord Bot 同一イベントループ版)
+# main.py (FastAPI + Discord Bot 同一イベントループ・完全版)
 # ============================================================================
 
 import os
@@ -24,7 +24,6 @@ class EventPayload(BaseModel):
     channelId: str
     message: str
 
-# Discord 投稿 API
 @app.post("/post")
 async def post_event(payload: EventPayload):
     channel = bot.get_channel(int(payload.channelId))
@@ -34,20 +33,24 @@ async def post_event(payload: EventPayload):
     await channel.send(payload.message)
     return {"ok": True}
 
-# Bot 起動（FastAPI と同じイベントループで動かす）
+# Discord Bot 起動
 async def start_bot():
     await bot.start(os.environ["DISCORD_TOKEN"])
 
-# メイン（FastAPI + Bot を同時起動）
-def main():
-    loop = asyncio.get_event_loop()
-
-    # Discord Bot をバックグラウンドで起動
-    loop.create_task(start_bot())
-
-    # FastAPI を同じイベントループで起動
+# FastAPI 起動（uvicorn.Server を await する）
+async def start_api():
     port = int(os.environ.get("PORT", 8080))
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    config = uvicorn.Config(app, host="0.0.0.0", port=port, log_level="info")
+    server = uvicorn.Server(config)
+    await server.serve()
+
+# メイン（Bot + FastAPI を同一イベントループで同時起動）
+async def main():
+    # Bot と FastAPI を同時に起動
+    await asyncio.gather(
+        start_bot(),
+        start_api()
+    )
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
