@@ -1,6 +1,5 @@
-
 # ============================================================================
-# main.py (Bot + FastAPI + ログ強化版)
+# main.py (Bot + FastAPI + イベントループ修正版 + ログ強化)
 # ============================================================================
 
 import os
@@ -48,9 +47,10 @@ async def post_message(data: PostData):
         log(f"エラー: チャンネル {data.channelId} が見つからない")
         return {"status": "channel_not_found"}
 
+    # Discord Bot のイベントループで送信する
     try:
-        await channel.send(data.message)
-        log(f"Discord 投稿成功 → {data.channelId}")
+        bot.loop.create_task(channel.send(data.message))
+        log(f"Discord 投稿タスク作成 → {data.channelId}")
         return {"status": "sent"}
     except Exception as e:
         log(f"Discord 投稿エラー: {e}")
