@@ -1,10 +1,5 @@
 # ============================================================================
-# main.py ver2 (FastAPI + Discord Bot 同一イベントループ・ログ強化版)
-# ============================================================================
-# 【目的】
-# - Bot が起動していない原因を Railway ログで完全に可視化する
-# - FastAPI と Discord Bot を同一イベントループで安定起動
-# - 起動ログ・例外ログを強化し、問題箇所を特定しやすくする
+# main.py ver3 (Railway 安定稼働版 + ログ強化)
 # ============================================================================
 
 import os
@@ -14,7 +9,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import uvicorn
 
-print("=== main.py ver2: 起動開始 ===")
+print("=== main.py ver3: 起動開始 ===")
 
 # ---------------------------------------------------------------------------
 # Discord Bot 設定
@@ -80,24 +75,25 @@ async def start_bot():
         print(f"=== Bot 起動エラー: {e} ===")
 
 # ---------------------------------------------------------------------------
-# FastAPI 起動
+# FastAPI 起動（バックグラウンドで永続）
 # ---------------------------------------------------------------------------
 async def start_api():
     print("=== FastAPI 起動開始 ===")
     port = int(os.environ.get("PORT", 8080))
     config = uvicorn.Config(app, host="0.0.0.0", port=port, log_level="info")
     server = uvicorn.Server(config)
-    await server.serve()
+
+    # serve() を await しない → 永続動作
+    asyncio.create_task(server.serve())
 
 # ---------------------------------------------------------------------------
-# メイン（Bot + FastAPI を同時起動）
+# メイン（Bot + FastAPI を同時起動し、永続ループで維持）
 # ---------------------------------------------------------------------------
 async def main():
     print("=== main() 開始: Bot + FastAPI 同時起動 ===")
-    await asyncio.gather(
-        start_bot(),
-        start_api()
-    )
+
+    await start_api()  # FastAPI をバックグラウンドで起動
+    await start_bot()  # Bot をメインで起動（永続）
 
 if __name__ == "__main__":
     print("=== asyncio.run(main()) 実行 ===")
